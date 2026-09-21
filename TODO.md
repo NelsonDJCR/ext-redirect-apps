@@ -1,1 +1,1 @@
-- before start a new session after wait the time allowed must to wait 5 minutes, this new feaute must to be in the settings section and you can change, but by default must to be activate by 5 minutes
+- Before starting a new session, enforce a 5-minute waiting period. Add this as a configurable option in the settings section, enabled by default with a value of 5 minutes.

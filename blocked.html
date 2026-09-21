@@ -76,13 +76,13 @@
 
     if (site) document.getElementById("site").textContent = site;
 
-    if (reason === "session") {
+    if (reason === "cooldown") {
       document.getElementById("icon").textContent = "⏱";
-      document.getElementById("title").textContent = "Tu sesión terminó";
+      document.getElementById("title").textContent = "Debes esperar antes de volver";
       document.getElementById("message-rest").textContent =
-        "alcanzó su límite de " + minutes + (minutes === "1" ? " minuto." : " minutos.");
+        "está en espera durante " + minutes + (minutes === "1" ? " minuto." : " minutos.");
       document.getElementById("schedule-text").textContent =
-        "Podrás volver a entrar en tu próximo horario:";
+        "Después de la espera, podrás usarlo en este horario:";
     }
 
     if (from && to) {

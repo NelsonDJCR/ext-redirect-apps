@@ -1,6 +1,12 @@
 // Segundos niveles comunes que se ignoran al buscar el nombre del sitio
 const SECOND_LEVEL = new Set(["com", "co", "org", "net", "gov", "edu"]);
 
+const DEFAULT_SETTINGS = {
+  sessionLimitMinutes: 10,
+  cooldownEnabled: true,
+  cooldownMinutes: 5
+};
+
 // "facebook.com", "https://m.facebook.com/x" o "Facebook" -> "facebook"
 function toKeyword(input) {
   let host = String(input || "").trim().toLowerCase();
@@ -53,19 +59,37 @@ function windowStartMs(site, now) {
   return start.getTime();
 }
 
+function effectiveSettings(settings) {
+  return { ...DEFAULT_SETTINGS, ...settings };
+}
+
 // Duración máxima de la sesión en ms (0 = sin límite)
-function limitMs(site) {
-  const minutes = Number(site.sessionMinutes);
+function limitMs(site, settings) {
+  const merged = effectiveSettings(settings);
+  const minutes = Number(site.sessionMinutes ?? merged.sessionLimitMinutes);
+  return Number.isFinite(minutes) && minutes > 0 ? minutes * 60 * 1000 : 0;
+}
+
+// Duración de la espera tras llegar al límite (0 = sin espera)
+function cooldownMs(settings) {
+  const merged = effectiveSettings(settings);
+  if (!merged.cooldownEnabled) return 0;
+  const minutes = Number(merged.cooldownMinutes);
   return Number.isFinite(minutes) && minutes > 0 ? minutes * 60 * 1000 : 0;
 }
 
 // Estado de la sesión en el horario actual: "none", "active" u "over"
-function sessionState(site, sessions, nowMs) {
-  const limit = limitMs(site);
+function sessionState(site, sessions, settings, nowMs) {
+  const limit = limitMs(site, settings);
   const startedAt = sessions[site.id];
   if (!limit || !startedAt) return "none";
   if (startedAt < windowStartMs(site, new Date(nowMs))) return "none"; // sesión de un horario anterior
   return nowMs >= startedAt + limit ? "over" : "active";
+}
+
+function isInCooldown(site, cooldowns, nowMs) {
+  const until = Number(cooldowns[site.id] || 0);
+  return Number.isFinite(until) && until > nowMs;
 }
 
 // Cola: evita que dos sincronizaciones corran al mismo tiempo
@@ -79,31 +103,63 @@ function syncRules() {
   return enqueue(doSync);
 }
 
-// Recalcula las reglas de bloqueo según la hora y las sesiones
+// Recalcula las reglas de bloqueo según la hora, sesiones y cooldowns
 async function doSync() {
-  const { sites = [], sessions = {} } = await chrome.storage.local.get(["sites", "sessions"]);
+  const {
+    sites = [],
+    sessions = {},
+    cooldowns = {},
+    settings = {}
+  } = await chrome.storage.local.get(["sites", "sessions", "cooldowns", "settings"]);
+
   const now = Date.now();
+  const merged = effectiveSettings(settings);
   const rules = [];
+  const cleanSessions = { ...sessions };
+  const cleanCooldowns = { ...cooldowns };
+  const overLimitSites = [];
+  let storageChanged = false;
 
   for (const site of sites) {
     if (site.enabled === false) continue;
     const keyword = toKeyword(site.name);
     if (!keyword) continue;
 
+    const cooldownUntil = Number(cleanCooldowns[site.id] || 0);
+    if (cooldownUntil && cooldownUntil <= now) {
+      delete cleanCooldowns[site.id];
+      storageChanged = true;
+    }
+
     let reason = "";
     if (!isAllowedNow(site)) {
       reason = "schedule";
+    } else if (isInCooldown(site, cleanCooldowns, now)) {
+      reason = "cooldown";
     } else {
-      const state = sessionState(site, sessions, now);
+      const state = sessionState(site, cleanSessions, merged, now);
       if (state === "over") {
-        reason = "session";
+        overLimitSites.push(site);
+        delete cleanSessions[site.id];
+        storageChanged = true;
+
+        const waitMs = cooldownMs(merged);
+        if (waitMs > 0) {
+          const until = now + waitMs;
+          cleanCooldowns[site.id] = until;
+          storageChanged = true;
+          reason = "cooldown";
+          // Despierta al terminar la espera
+          chrome.alarms.create("cooldown-end:" + site.id, { when: until });
+        }
       } else if (state === "active") {
         // Despierta justo cuando termina la sesión
         chrome.alarms.create("session-end:" + site.id, {
-          when: sessions[site.id] + limitMs(site)
+          when: cleanSessions[site.id] + limitMs(site, merged)
         });
       }
     }
+
     if (!reason) continue;
 
     const params = new URLSearchParams({ site: keyword, reason });
@@ -111,7 +167,12 @@ async function doSync() {
       params.set("from", site.from);
       params.set("to", site.to);
     }
-    if (reason === "session") params.set("minutes", String(site.sessionMinutes));
+
+    if (reason === "cooldown") {
+      const until = Number(cleanCooldowns[site.id] || 0);
+      const remainingMinutes = Math.max(1, Math.ceil((until - now) / 60000));
+      params.set("minutes", String(remainingMinutes));
+    }
 
     rules.push({
       id: rules.length + 1,
@@ -133,14 +194,19 @@ async function doSync() {
     addRules: rules
   });
 
-  // Limpia sesiones de sitios que ya no existen
+  // Limpia sesiones/cooldowns de sitios que ya no existen
   const ids = new Set(sites.map((site) => site.id));
-  const kept = Object.fromEntries(Object.entries(sessions).filter(([id]) => ids.has(id)));
-  if (Object.keys(kept).length !== Object.keys(sessions).length) {
-    await chrome.storage.local.set({ sessions: kept });
+  const keptSessions = Object.fromEntries(Object.entries(cleanSessions).filter(([id]) => ids.has(id)));
+  const keptCooldowns = Object.fromEntries(Object.entries(cleanCooldowns).filter(([id]) => ids.has(id)));
+  if (Object.keys(keptSessions).length !== Object.keys(cleanSessions).length) storageChanged = true;
+  if (Object.keys(keptCooldowns).length !== Object.keys(cleanCooldowns).length) storageChanged = true;
+
+  if (storageChanged) {
+    await chrome.storage.local.set({ sessions: keptSessions, cooldowns: keptCooldowns });
   }
 
   await redirectOpenTabs(rules);
+  await closeOverLimitTabs(overLimitSites);
 }
 
 // Las reglas solo afectan navegaciones nuevas, así que
@@ -161,19 +227,56 @@ async function redirectOpenTabs(rules) {
   }
 }
 
+async function closeOverLimitTabs(sites) {
+  if (!sites.length) return;
+
+  const regexes = sites
+    .map((site) => {
+      const keyword = toKeyword(site.name);
+      return keyword ? new RegExp(urlPattern(keyword), "i") : null;
+    })
+    .filter(Boolean);
+
+  if (!regexes.length) return;
+
+  const tabs = await chrome.tabs.query({});
+  const toClose = [];
+  for (const tab of tabs) {
+    if (!tab.url || !/^https?:\/\//.test(tab.url)) continue;
+    if (regexes.some((regex) => regex.test(tab.url)) && typeof tab.id === "number") {
+      toClose.push(tab.id);
+    }
+  }
+
+  if (toClose.length) {
+    await chrome.tabs.remove(toClose);
+  }
+}
+
 // Al abrir un sitio con límite de sesión, inicia la sesión si aún no hay una
 async function handleNavigation(url) {
   if (!/^https?:\/\//.test(url)) return;
-  const { sites = [], sessions = {} } = await chrome.storage.local.get(["sites", "sessions"]);
+
+  const {
+    sites = [],
+    sessions = {},
+    cooldowns = {},
+    settings = {}
+  } = await chrome.storage.local.get(["sites", "sessions", "cooldowns", "settings"]);
+
+  const now = Date.now();
+  const merged = effectiveSettings(settings);
   let changed = false;
 
   for (const site of sites) {
-    if (site.enabled === false || !limitMs(site) || !isAllowedNow(site)) continue;
+    if (site.enabled === false || !limitMs(site, merged) || !isAllowedNow(site)) continue;
+    if (isInCooldown(site, cooldowns, now)) continue;
+
     const keyword = toKeyword(site.name);
     if (!keyword || !new RegExp(urlPattern(keyword), "i").test(url)) continue;
 
-    if (sessionState(site, sessions, Date.now()) === "none") {
-      sessions[site.id] = Date.now();
+    if (sessionState(site, sessions, merged, now) === "none") {
+      sessions[site.id] = now;
       changed = true;
     }
   }
@@ -187,9 +290,28 @@ function startTimer() {
 }
 
 chrome.runtime.onInstalled.addListener(async () => {
-  const { sites, sessions } = await chrome.storage.local.get(["sites", "sessions"]);
+  const { sites, sessions, cooldowns, settings } = await chrome.storage.local.get([
+    "sites",
+    "sessions",
+    "cooldowns",
+    "settings"
+  ]);
+
   if (!sites) await chrome.storage.local.set({ sites: [] });
   if (!sessions) await chrome.storage.local.set({ sessions: {} });
+  if (!cooldowns) await chrome.storage.local.set({ cooldowns: {} });
+  if (!settings) {
+    await chrome.storage.local.set({
+      settings: {
+        lockEnabled: false,
+        lockSeconds: 15,
+        sessionLimitMinutes: 10,
+        cooldownEnabled: true,
+        cooldownMinutes: 5
+      }
+    });
+  }
+
   startTimer();
   syncRules();
 });
@@ -200,12 +322,19 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === "tick" || alarm.name.startsWith("session-end:")) syncRules();
+  if (
+    alarm.name === "tick" ||
+    alarm.name.startsWith("session-end:") ||
+    alarm.name.startsWith("cooldown-end:")
+  ) {
+    syncRules();
+  }
 });
 
-// Cuando cambias la lista desde el popup, se aplica al instante
+// Cuando cambias la lista o configuración desde el popup, se aplica al instante
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "local" && changes.sites) syncRules();
+  if (area !== "local") return;
+  if (changes.sites || changes.settings) syncRules();
 });
 
 // Detecta cuándo abres un sitio (solo la página principal, no iframes)

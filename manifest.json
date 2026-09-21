@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "ext-redirect-apps",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "description": "Bloquea sitios según una lista y un horario permitido.",
-  "permissions": ["declarativeNetRequest", "storage", "alarms", "webNavigation"],
+  "permissions": ["declarativeNetRequest", "storage", "alarms", "webNavigation", "tabs"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"

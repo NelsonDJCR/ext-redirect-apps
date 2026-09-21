@@ -281,6 +281,33 @@
 
     <div class="setting">
       <div class="setting-text">
+        <span class="setting-title">Límite por sesión</span>
+        <span class="setting-desc">Tiempo máximo que puedes permanecer en un sitio permitido.</span>
+      </div>
+      <input type="number" id="session-limit-minutes" min="1" max="240" step="1" value="10" />
+    </div>
+
+    <div class="setting">
+      <div class="setting-text">
+        <span class="setting-title">Espera tras llegar al límite</span>
+        <span class="setting-desc">Activa una pausa obligatoria antes de volver a entrar.</span>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="cooldown-enabled" checked />
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="setting" id="cooldown-minutes-row">
+      <div class="setting-text">
+        <span class="setting-title">Tiempo de espera tras límite</span>
+        <span class="setting-desc">En minutos (entre 1 y 120).</span>
+      </div>
+      <input type="number" id="cooldown-minutes" min="1" max="120" step="1" value="5" />
+    </div>
+
+    <div class="setting">
+      <div class="setting-text">
         <span class="setting-title">Bloquear configuraciones por tiempo</span>
         <span class="setting-desc">Para editar o eliminar un sitio tendrás que esperar antes de poder hacerlo.</span>
       </div>

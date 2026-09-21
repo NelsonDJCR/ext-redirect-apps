@@ -1,6 +1,16 @@
-const DEFAULT_SETTINGS = { lockEnabled: false, lockSeconds: 15 };
+const DEFAULT_SETTINGS = {
+  lockEnabled: false,
+  lockSeconds: 15,
+  sessionLimitMinutes: 10,
+  cooldownEnabled: true,
+  cooldownMinutes: 5
+};
 const MIN_SECONDS = 5;
 const MAX_SECONDS = 300;
+const MIN_SESSION_MINUTES = 1;
+const MAX_SESSION_MINUTES = 240;
+const MIN_COOLDOWN_MINUTES = 1;
+const MAX_COOLDOWN_MINUTES = 120;
 
 const $ = (id) => document.getElementById(id);
 
@@ -18,6 +28,10 @@ const backBtn = $("back-btn");
 const lockEnabledInput = $("lock-enabled");
 const lockSecondsInput = $("lock-seconds");
 const lockSecondsRow = $("lock-seconds-row");
+const sessionLimitInput = $("session-limit-minutes");
+const cooldownEnabledInput = $("cooldown-enabled");
+const cooldownMinutesInput = $("cooldown-minutes");
+const cooldownMinutesRow = $("cooldown-minutes-row");
 const settingsErrorEl = $("settings-error");
 const overlay = $("overlay");
 const overlayTitle = $("overlay-title");
@@ -300,6 +314,10 @@ async function loadSettingsUI() {
   lockEnabledInput.checked = settings.lockEnabled;
   lockSecondsInput.value = settings.lockSeconds;
   lockSecondsRow.style.opacity = settings.lockEnabled ? "1" : "0.55";
+  sessionLimitInput.value = settings.sessionLimitMinutes;
+  cooldownEnabledInput.checked = settings.cooldownEnabled;
+  cooldownMinutesInput.value = settings.cooldownMinutes;
+  cooldownMinutesRow.style.opacity = settings.cooldownEnabled ? "1" : "0.55";
   settingsErrorEl.textContent = "";
 }
 
@@ -338,6 +356,62 @@ lockSecondsInput.addEventListener("change", async () => {
   }
 
   await saveSettings({ ...settings, lockSeconds: value });
+  loadSettingsUI();
+});
+
+sessionLimitInput.addEventListener("change", async () => {
+  const settings = await getSettings();
+  const value = Number(sessionLimitInput.value);
+
+  if (
+    !Number.isInteger(value) ||
+    value < MIN_SESSION_MINUTES ||
+    value > MAX_SESSION_MINUTES
+  ) {
+    settingsErrorEl.textContent =
+      "El límite por sesión debe ser un entero entre " +
+      MIN_SESSION_MINUTES +
+      " y " +
+      MAX_SESSION_MINUTES +
+      " minutos.";
+    sessionLimitInput.value = settings.sessionLimitMinutes;
+    return;
+  }
+
+  settingsErrorEl.textContent = "";
+  if (value === settings.sessionLimitMinutes) return;
+  await saveSettings({ ...settings, sessionLimitMinutes: value });
+  loadSettingsUI();
+});
+
+cooldownEnabledInput.addEventListener("change", async () => {
+  const settings = await getSettings();
+  await saveSettings({ ...settings, cooldownEnabled: cooldownEnabledInput.checked });
+  loadSettingsUI();
+});
+
+cooldownMinutesInput.addEventListener("change", async () => {
+  const settings = await getSettings();
+  const value = Number(cooldownMinutesInput.value);
+
+  if (
+    !Number.isInteger(value) ||
+    value < MIN_COOLDOWN_MINUTES ||
+    value > MAX_COOLDOWN_MINUTES
+  ) {
+    settingsErrorEl.textContent =
+      "La espera tras límite debe ser un entero entre " +
+      MIN_COOLDOWN_MINUTES +
+      " y " +
+      MAX_COOLDOWN_MINUTES +
+      " minutos.";
+    cooldownMinutesInput.value = settings.cooldownMinutes;
+    return;
+  }
+
+  settingsErrorEl.textContent = "";
+  if (value === settings.cooldownMinutes) return;
+  await saveSettings({ ...settings, cooldownMinutes: value });
   loadSettingsUI();
 });
 
