@@ -52,6 +52,19 @@
       background: var(--bg);
       font-weight: 600;
     }
+    .timer {
+      margin-top: 12px;
+      font-size: 34px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      font-variant-numeric: tabular-nums;
+      color: var(--accent);
+    }
+    .timer-label {
+      margin-top: 2px;
+      font-size: 12px;
+      color: var(--muted);
+    }
   </style>
 </head>
 <body>
@@ -64,6 +77,8 @@
     </p>
     <p id="schedule-text" hidden>Puedes usarlo en este horario:</p>
     <div class="window" id="window" hidden></div>
+    <div class="timer" id="timer" hidden>00:00</div>
+    <p class="timer-label" id="timer-label" hidden>Tiempo restante</p>
   </div>
 
   <script>
@@ -73,22 +88,67 @@
     const to = params.get("to");
     const reason = params.get("reason");
     const minutes = params.get("minutes");
+    const until = Number(params.get("until") || 0);
+
+    const iconEl = document.getElementById("icon");
+    const titleEl = document.getElementById("title");
+    const messageRestEl = document.getElementById("message-rest");
+    const scheduleTextEl = document.getElementById("schedule-text");
+    const windowEl = document.getElementById("window");
+    const timerEl = document.getElementById("timer");
+    const timerLabelEl = document.getElementById("timer-label");
 
     if (site) document.getElementById("site").textContent = site;
 
+    function formatClock(ms) {
+      const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+      const minutesPart = Math.floor(totalSeconds / 60);
+      const secondsPart = totalSeconds % 60;
+      return String(minutesPart).padStart(2, "0") + ":" + String(secondsPart).padStart(2, "0");
+    }
+
+    function showCooldownTimer() {
+      timerEl.hidden = false;
+      timerLabelEl.hidden = false;
+
+      if (until > Date.now()) {
+        const update = () => {
+          const remaining = until - Date.now();
+          if (remaining <= 0) {
+            timerEl.textContent = "00:00";
+            timerLabelEl.textContent = "Ya puedes volver a entrar";
+            clearInterval(intervalId);
+            return;
+          }
+          timerEl.textContent = formatClock(remaining);
+        };
+
+        update();
+        const intervalId = setInterval(update, 250);
+        return;
+      }
+
+      timerEl.textContent = (minutes || "0") + ":00";
+    }
+
     if (reason === "cooldown") {
-      document.getElementById("icon").textContent = "⏱";
-      document.getElementById("title").textContent = "Debes esperar antes de volver";
-      document.getElementById("message-rest").textContent =
+      iconEl.textContent = "⏱";
+      titleEl.textContent = "Bloqueado por cooldown";
+      messageRestEl.textContent =
         "está en espera durante " + minutes + (minutes === "1" ? " minuto." : " minutos.");
-      document.getElementById("schedule-text").textContent =
+      scheduleTextEl.textContent =
         "Después de la espera, podrás usarlo en este horario:";
+      showCooldownTimer();
+    } else if (reason === "schedule") {
+      iconEl.textContent = "🕒";
+      titleEl.textContent = "Fuera de horario permitido";
+      messageRestEl.textContent = "está bloqueado porque ahora no está dentro de tu horario permitido.";
     }
 
     if (from && to) {
-      document.getElementById("window").textContent = from + " – " + to;
-      document.getElementById("window").hidden = false;
-      document.getElementById("schedule-text").hidden = false;
+      windowEl.textContent = from + " – " + to;
+      windowEl.hidden = false;
+      scheduleTextEl.hidden = false;
     }
   </script>
 </body>

@@ -41,6 +41,79 @@ const confirmBtn = $("overlay-confirm");
 
 // Sitio que está en modo edición (solo vive mientras el popup está abierto)
 let editingId = null;
+let refreshTimer = null;
+
+/* ---------- Utilidades de tiempo de sesión ---------- */
+
+function toMinutes(value) {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(value || "");
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function isAllowedNow(site, now = new Date()) {
+  const from = toMinutes(site.from);
+  const to = toMinutes(site.to);
+  if (from === null || to === null || from === to) return false;
+  const current = now.getHours() * 60 + now.getMinutes();
+  return from < to ? current >= from && current < to : current >= from || current < to;
+}
+
+function windowStartMs(site, now) {
+  const from = toMinutes(site.from);
+  const start = new Date(now);
+  start.setHours(Math.floor(from / 60), from % 60, 0, 0);
+  if (start.getTime() > now.getTime()) start.setDate(start.getDate() - 1);
+  return start.getTime();
+}
+
+function effectiveSettings(settings) {
+  return { ...DEFAULT_SETTINGS, ...settings };
+}
+
+function limitMs(site, settings) {
+  const merged = effectiveSettings(settings);
+  const minutes = Number(site.sessionMinutes ?? merged.sessionLimitMinutes);
+  return Number.isFinite(minutes) && minutes > 0 ? minutes * 60 * 1000 : 0;
+}
+
+function formatMinutesFromMs(ms) {
+  const total = Math.max(0, Math.ceil(ms / 60000));
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  if (h > 0) return h + "h " + String(m).padStart(2, "0") + "m";
+  return total + "m";
+}
+
+function getSiteStatus(site, sessions, cooldowns, settings, nowMs) {
+  if (site.enabled === false || !isAllowedNow(site, new Date(nowMs))) return null;
+
+  const cooldownUntil = Number(cooldowns?.[site.id] || 0);
+  if (cooldownUntil > nowMs) {
+    const totalCooldown = Number(settings.cooldownMinutes) * 60 * 1000;
+    const remaining = cooldownUntil - nowMs;
+    const progress = totalCooldown > 0 ? Math.min(100, Math.max(0, ((totalCooldown - remaining) / totalCooldown) * 100)) : 0;
+    return {
+      type: "cooldown",
+      progress,
+      left: formatMinutesFromMs(remaining)
+    };
+  }
+
+  const limit = limitMs(site, settings);
+  const startedAt = Number(sessions?.[site.id] || 0);
+  if (!limit || !startedAt) return null;
+  if (startedAt < windowStartMs(site, new Date(nowMs))) return null;
+
+  const elapsed = Math.max(0, nowMs - startedAt);
+  const remaining = Math.max(0, limit - elapsed);
+  return {
+    type: "active",
+    progress: Math.min(100, Math.max(0, (elapsed / limit) * 100)),
+    elapsed: formatMinutesFromMs(elapsed),
+    left: formatMinutesFromMs(remaining)
+  };
+}
 
 /* ---------- Almacenamiento ---------- */
 
@@ -194,7 +267,11 @@ function makeIconButton(symbol, title, extraClass) {
 }
 
 async function render() {
-  const sites = await getSites();
+  const { sites = [], sessions = {}, cooldowns = {}, settings = {} } =
+    await chrome.storage.local.get(["sites", "sessions", "cooldowns", "settings"]);
+  const mergedSettings = effectiveSettings(settings);
+  const nowMs = Date.now();
+
   listEl.textContent = "";
   emptyEl.hidden = sites.length > 0;
 
@@ -297,6 +374,36 @@ async function render() {
       editActions.append(cancel, save);
       item.append(times, editActions);
     } else {
+      const status = getSiteStatus(site, sessions, cooldowns, mergedSettings, nowMs);
+      if (status) {
+        const box = document.createElement("div");
+        box.className = "session-box" + (status.type === "cooldown" ? " cooldown" : "");
+
+        const meta = document.createElement("div");
+        meta.className = "session-meta";
+
+        const left = document.createElement("span");
+        if (status.type === "active") {
+          left.innerHTML = "Llevas <strong>" + status.elapsed + "</strong>";
+        } else {
+          left.innerHTML = "Espera activa";
+        }
+
+        const right = document.createElement("span");
+        right.innerHTML = "Te queda <strong>" + status.left + "</strong>";
+
+        const track = document.createElement("div");
+        track.className = "progress-track";
+        const fill = document.createElement("div");
+        fill.className = "progress-fill";
+        fill.style.width = status.progress.toFixed(1) + "%";
+        track.append(fill);
+
+        meta.append(left, right);
+        box.append(meta, track);
+        item.append(box);
+      }
+
       const schedule = document.createElement("span");
       schedule.className = "item-schedule";
       schedule.textContent = "Permitido: " + site.from + " – " + site.to;
@@ -434,3 +541,8 @@ nameInput.addEventListener("keydown", (event) => {
 });
 
 render();
+
+if (refreshTimer) clearInterval(refreshTimer);
+refreshTimer = setInterval(() => {
+  if (!viewSites.hidden) render();
+}, 1000);

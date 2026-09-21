@@ -172,6 +172,7 @@ async function doSync() {
       const until = Number(cleanCooldowns[site.id] || 0);
       const remainingMinutes = Math.max(1, Math.ceil((until - now) / 60000));
       params.set("minutes", String(remainingMinutes));
+      if (until > now) params.set("until", String(until));
     }
 
     rules.push({
