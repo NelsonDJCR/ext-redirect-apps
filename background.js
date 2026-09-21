@@ -6,7 +6,6 @@ const DEFAULT_SETTINGS = {
   cooldownEnabled: true,
   cooldownMinutes: 5
 };
-const DEFAULT_POMODORO_MINUTES = 20;
 
 // "facebook.com", "https://m.facebook.com/x" o "Facebook" -> "facebook"
 function toKeyword(input) {
@@ -261,25 +260,35 @@ async function doSync() {
 
   if (pomodoroActive) {
     const remainingMinutes = Math.max(1, Math.ceil((pomodoroUntil - now) / 60000));
-    const params = new URLSearchParams({
-      reason: "pomodoro",
-      site: "todos",
-      minutes: String(remainingMinutes),
-      until: String(pomodoroUntil)
-    });
 
-    rules.push({
-      id: 1,
-      priority: 1,
-      action: {
-        type: "redirect",
-        redirect: { extensionPath: "/blocked.html?" + params.toString() }
-      },
-      condition: {
-        regexFilter: "^https?://",
-        resourceTypes: ["main_frame"]
-      }
-    });
+    for (const site of sites) {
+      if (site.enabled === false) continue;
+      const keyword = toKeyword(site.name);
+      if (!keyword) continue;
+
+      const params = new URLSearchParams({
+        reason: "pomodoro",
+        site: keyword,
+        minutes: String(remainingMinutes),
+        until: String(pomodoroUntil)
+      });
+
+      const hostLike = toHostLike(site.name);
+      if (hostLike) params.set("host", hostLike);
+
+      rules.push({
+        id: rules.length + 1,
+        priority: 1,
+        action: {
+          type: "redirect",
+          redirect: { extensionPath: "/blocked.html?" + params.toString() }
+        },
+        condition: {
+          regexFilter: urlPattern(keyword),
+          resourceTypes: ["main_frame"]
+        }
+      });
+    }
 
     chrome.alarms.create("pomodoro-end", { when: pomodoroUntil });
   }
