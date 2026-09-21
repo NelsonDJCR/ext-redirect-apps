@@ -101,11 +101,27 @@ function getSiteStatus(site, sessions, cooldowns, settings, nowMs) {
   }
 
   const limit = limitMs(site, settings);
-  const startedAt = Number(sessions?.[site.id] || 0);
-  if (!limit || !startedAt) return null;
-  if (startedAt < windowStartMs(site, new Date(nowMs))) return null;
+  if (!limit) return null;
 
-  const elapsed = Math.max(0, nowMs - startedAt);
+  const rawSession = sessions?.[site.id];
+  const startMs = windowStartMs(site, new Date(nowMs));
+  let elapsed = 0;
+
+  if (rawSession && typeof rawSession === "object") {
+    const recordStart = Number(rawSession.windowStart);
+    if (recordStart !== startMs) return null;
+    const baseElapsed = Math.max(0, Number(rawSession.elapsedMs) || 0);
+    const runningSince = Number(rawSession.runningSince);
+    const runningElapsed = Number.isFinite(runningSince) && runningSince > 0
+      ? Math.max(0, nowMs - runningSince)
+      : 0;
+    elapsed = baseElapsed + runningElapsed;
+  } else {
+    const startedAt = Number(rawSession || 0);
+    if (!startedAt || startedAt < startMs) return null;
+    elapsed = Math.max(0, nowMs - startedAt);
+  }
+
   const remaining = Math.max(0, limit - elapsed);
   return {
     type: "active",

@@ -85,13 +85,47 @@ function cooldownMs(settings) {
   return Number.isFinite(minutes) && minutes > 0 ? minutes * 60 * 1000 : 0;
 }
 
+function normalizeSessionRecord(value, site, nowMs) {
+  const startMs = windowStartMs(site, new Date(nowMs));
+
+  // Formato actual: { windowStart, elapsedMs, runningSince }
+  if (value && typeof value === "object") {
+    const recordStart = Number(value.windowStart);
+    if (!Number.isFinite(recordStart) || recordStart !== startMs) return null;
+
+    const elapsedMs = Math.max(0, Number(value.elapsedMs) || 0);
+    const runningRaw = Number(value.runningSince);
+    const runningSince = Number.isFinite(runningRaw) && runningRaw > 0 ? runningRaw : null;
+    return { windowStart: startMs, elapsedMs, runningSince };
+  }
+
+  // Compatibilidad con formato legado: sessions[id] = timestampInicio
+  const startedAt = Number(value);
+  if (!Number.isFinite(startedAt) || startedAt <= 0) return null;
+  if (startedAt < startMs) return null;
+
+  return {
+    windowStart: startMs,
+    elapsedMs: Math.max(0, nowMs - startedAt),
+    runningSince: null
+  };
+}
+
+function getSessionElapsedMs(record, nowMs) {
+  if (!record) return 0;
+  const running = Number(record.runningSince);
+  const runningMs = Number.isFinite(running) && running > 0 ? Math.max(0, nowMs - running) : 0;
+  return Math.max(0, Number(record.elapsedMs) || 0) + runningMs;
+}
+
 // Estado de la sesión en el horario actual: "none", "active" u "over"
 function sessionState(site, sessions, settings, nowMs) {
   const limit = limitMs(site, settings);
-  const startedAt = sessions[site.id];
-  if (!limit || !startedAt) return "none";
-  if (startedAt < windowStartMs(site, new Date(nowMs))) return "none"; // sesión de un horario anterior
-  return nowMs >= startedAt + limit ? "over" : "active";
+  if (!limit) return "none";
+
+  const record = normalizeSessionRecord(sessions[site.id], site, nowMs);
+  if (!record) return "none";
+  return getSessionElapsedMs(record, nowMs) >= limit ? "over" : "active";
 }
 
 function isInCooldown(site, cooldowns, nowMs) {
@@ -108,6 +142,95 @@ function enqueue(task) {
 
 function syncRules() {
   return enqueue(doSync);
+}
+
+let hasFocusedWindow = true;
+
+async function getCurrentActiveUrl() {
+  if (!hasFocusedWindow) return "";
+  const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  return tabs[0]?.url || "";
+}
+
+// Solo suma tiempo cuando el sitio coincide con la pestaña activa
+async function updateSessionsFromActivity() {
+  const {
+    sites = [],
+    sessions = {},
+    cooldowns = {},
+    settings = {}
+  } = await chrome.storage.local.get(["sites", "sessions", "cooldowns", "settings"]);
+
+  const now = Date.now();
+  const merged = effectiveSettings(settings);
+  const activeUrl = await getCurrentActiveUrl();
+  const nextSessions = { ...sessions };
+  let changed = false;
+
+  for (const site of sites) {
+    const current = normalizeSessionRecord(nextSessions[site.id], site, now);
+
+    const shouldTrack =
+      site.enabled !== false &&
+      !!limitMs(site, merged) &&
+      isAllowedNow(site) &&
+      !isInCooldown(site, cooldowns, now);
+
+    if (!shouldTrack) {
+      if (current?.runningSince) {
+        current.elapsedMs = getSessionElapsedMs(current, now);
+        current.runningSince = null;
+        nextSessions[site.id] = current;
+        changed = true;
+      }
+      continue;
+    }
+
+    const keyword = toKeyword(site.name);
+    const isActiveSite = keyword && /^https?:\/\//.test(activeUrl)
+      ? new RegExp(urlPattern(keyword), "i").test(activeUrl)
+      : false;
+
+    if (!current) {
+      if (isActiveSite) {
+        nextSessions[site.id] = {
+          windowStart: windowStartMs(site, new Date(now)),
+          elapsedMs: 0,
+          runningSince: now
+        };
+        changed = true;
+      }
+      continue;
+    }
+
+    if (isActiveSite) {
+      if (!current.runningSince) {
+        current.runningSince = now;
+        nextSessions[site.id] = current;
+        changed = true;
+      }
+      continue;
+    }
+
+    if (current.runningSince) {
+      current.elapsedMs = getSessionElapsedMs(current, now);
+      current.runningSince = null;
+      nextSessions[site.id] = current;
+      changed = true;
+    }
+  }
+
+  const ids = new Set(sites.map((site) => site.id));
+  for (const id of Object.keys(nextSessions)) {
+    if (!ids.has(id)) {
+      delete nextSessions[id];
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    await chrome.storage.local.set({ sessions: nextSessions });
+  }
 }
 
 // Recalcula las reglas de bloqueo según la hora, sesiones y cooldowns
@@ -159,11 +282,6 @@ async function doSync() {
           // Despierta al terminar la espera
           chrome.alarms.create("cooldown-end:" + site.id, { when: until });
         }
-      } else if (state === "active") {
-        // Despierta justo cuando termina la sesión
-        chrome.alarms.create("session-end:" + site.id, {
-          when: cleanSessions[site.id] + limitMs(site, merged)
-        });
       }
     }
 
@@ -266,32 +384,7 @@ async function closeOverLimitTabs(sites) {
 // Al abrir un sitio con límite de sesión, inicia la sesión si aún no hay una
 async function handleNavigation(url) {
   if (!/^https?:\/\//.test(url)) return;
-
-  const {
-    sites = [],
-    sessions = {},
-    cooldowns = {},
-    settings = {}
-  } = await chrome.storage.local.get(["sites", "sessions", "cooldowns", "settings"]);
-
-  const now = Date.now();
-  const merged = effectiveSettings(settings);
-  let changed = false;
-
-  for (const site of sites) {
-    if (site.enabled === false || !limitMs(site, merged) || !isAllowedNow(site)) continue;
-    if (isInCooldown(site, cooldowns, now)) continue;
-
-    const keyword = toKeyword(site.name);
-    if (!keyword || !new RegExp(urlPattern(keyword), "i").test(url)) continue;
-
-    if (sessionState(site, sessions, merged, now) === "none") {
-      sessions[site.id] = now;
-      changed = true;
-    }
-  }
-
-  if (changed) await chrome.storage.local.set({ sessions });
+  await updateSessionsFromActivity();
   await doSync();
 }
 
@@ -328,27 +421,60 @@ chrome.runtime.onInstalled.addListener(async () => {
 
 chrome.runtime.onStartup.addListener(() => {
   startTimer();
-  syncRules();
+  enqueue(async () => {
+    await updateSessionsFromActivity();
+    await doSync();
+  });
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (
     alarm.name === "tick" ||
-    alarm.name.startsWith("session-end:") ||
     alarm.name.startsWith("cooldown-end:")
   ) {
-    syncRules();
+    enqueue(async () => {
+      await updateSessionsFromActivity();
+      await doSync();
+    });
   }
 });
 
 // Cuando cambias la lista o configuración desde el popup, se aplica al instante
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
-  if (changes.sites || changes.settings) syncRules();
+  if (changes.sites || changes.settings) {
+    enqueue(async () => {
+      await updateSessionsFromActivity();
+      await doSync();
+    });
+  }
 });
 
 // Detecta cuándo abres un sitio (solo la página principal, no iframes)
 chrome.webNavigation.onCommitted.addListener((details) => {
   if (details.frameId !== 0) return;
   enqueue(() => handleNavigation(details.url));
+});
+
+chrome.tabs.onActivated.addListener(() => {
+  enqueue(async () => {
+    await updateSessionsFromActivity();
+    await doSync();
+  });
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (!changeInfo.url && changeInfo.status !== "complete") return;
+  enqueue(async () => {
+    await updateSessionsFromActivity();
+    await doSync();
+  });
+});
+
+chrome.windows.onFocusChanged.addListener((windowId) => {
+  hasFocusedWindow = windowId !== chrome.windows.WINDOW_ID_NONE;
+  enqueue(async () => {
+    await updateSessionsFromActivity();
+    await doSync();
+  });
 });
