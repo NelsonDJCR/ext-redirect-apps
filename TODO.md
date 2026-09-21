@@ -1,0 +1,1 @@
+- before start a new session after wait the time allowed must to wait 5 minutes, this new feaute must to be in the settings section and you can change, but by default must to be activate by 5 minutes
