@@ -30,6 +30,13 @@ function urlPattern(keyword) {
   return "^https?://([^/]*\\.)?" + escapeRegex(keyword) + "\\.";
 }
 
+function toHostLike(input) {
+  let host = String(input || "").trim().toLowerCase();
+  host = host.replace(/^[a-z]+:\/\//, "").split(/[/?#]/)[0];
+  host = host.replace(/^www\./, "");
+  return host;
+}
+
 // "10:00" -> 600 (minutos desde medianoche)
 function toMinutes(value) {
   const match = /^(\d{1,2}):(\d{2})$/.exec(value || "");
@@ -163,6 +170,8 @@ async function doSync() {
     if (!reason) continue;
 
     const params = new URLSearchParams({ site: keyword, reason });
+    const hostLike = toHostLike(site.name);
+    if (hostLike) params.set("host", hostLike);
     if (site.from && site.to) {
       params.set("from", site.from);
       params.set("to", site.to);

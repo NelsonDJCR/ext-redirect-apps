@@ -65,6 +65,22 @@
       font-size: 12px;
       color: var(--muted);
     }
+    .actions {
+      margin-top: 14px;
+      display: flex;
+      justify-content: center;
+    }
+    .enter-btn {
+      border: none;
+      border-radius: 999px;
+      padding: 10px 16px;
+      font-weight: 600;
+      font-size: 14px;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+    }
+    .enter-btn:hover { filter: brightness(1.05); }
   </style>
 </head>
 <body>
@@ -79,6 +95,9 @@
     <div class="window" id="window" hidden></div>
     <div class="timer" id="timer" hidden>00:00</div>
     <p class="timer-label" id="timer-label" hidden>Tiempo restante</p>
+    <div class="actions">
+      <button id="enter-btn" class="enter-btn" type="button" hidden>Ingresar al sitio</button>
+    </div>
   </div>
 
   <script>
@@ -88,6 +107,7 @@
     const to = params.get("to");
     const reason = params.get("reason");
     const minutes = params.get("minutes");
+    const host = params.get("host") || "";
     const until = Number(params.get("until") || 0);
 
     const iconEl = document.getElementById("icon");
@@ -97,6 +117,7 @@
     const windowEl = document.getElementById("window");
     const timerEl = document.getElementById("timer");
     const timerLabelEl = document.getElementById("timer-label");
+    const enterBtnEl = document.getElementById("enter-btn");
 
     if (site) document.getElementById("site").textContent = site;
 
@@ -110,25 +131,36 @@
     function showCooldownTimer() {
       timerEl.hidden = false;
       timerLabelEl.hidden = false;
+      enterBtnEl.hidden = true;
 
-      if (until > Date.now()) {
-        const update = () => {
-          const remaining = until - Date.now();
-          if (remaining <= 0) {
-            timerEl.textContent = "00:00";
-            timerLabelEl.textContent = "Ya puedes volver a entrar";
-            clearInterval(intervalId);
-            return;
-          }
-          timerEl.textContent = formatClock(remaining);
-        };
+      let endAt = until;
+      if (!(endAt > Date.now())) {
+        const fallbackMinutes = Number(minutes || 0);
+        if (fallbackMinutes > 0) endAt = Date.now() + fallbackMinutes * 60 * 1000;
+      }
 
-        update();
-        const intervalId = setInterval(update, 250);
+      if (!(endAt > Date.now())) {
+        timerEl.textContent = "00:00";
+        timerLabelEl.textContent = "Ya puedes volver a entrar";
+        enterBtnEl.hidden = false;
         return;
       }
 
-      timerEl.textContent = (minutes || "0") + ":00";
+      let intervalId = 0;
+      const update = () => {
+        const remaining = endAt - Date.now();
+        if (remaining <= 0) {
+          timerEl.textContent = "00:00";
+          timerLabelEl.textContent = "Ya puedes volver a entrar";
+          enterBtnEl.hidden = false;
+          if (intervalId) clearInterval(intervalId);
+          return;
+        }
+        timerEl.textContent = formatClock(remaining);
+      };
+
+      update();
+      intervalId = setInterval(update, 250);
     }
 
     if (reason === "cooldown") {
@@ -143,6 +175,10 @@
       iconEl.textContent = "🕒";
       titleEl.textContent = "Fuera de horario permitido";
       messageRestEl.textContent = "está bloqueado porque ahora no está dentro de tu horario permitido.";
+    } else {
+      iconEl.textContent = "🚫";
+      titleEl.textContent = "Sitio bloqueado";
+      messageRestEl.textContent = "está bloqueado por las reglas de la extensión.";
     }
 
     if (from && to) {
@@ -150,6 +186,16 @@
       windowEl.hidden = false;
       scheduleTextEl.hidden = false;
     }
+
+    function toEnterUrl() {
+      if (host) return "https://" + host;
+      if (site) return "https://" + site + ".com";
+      return "https://www.google.com";
+    }
+
+    enterBtnEl.addEventListener("click", () => {
+      location.href = toEnterUrl();
+    });
   </script>
 </body>
 </html>
