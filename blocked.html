@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sitio bloqueado</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --card: #ffffff;
+      --text: #1c1f24;
+      --muted: #6b7280;
+      --accent: #e5484d;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #14161a;
+        --card: #1e2127;
+        --text: #f1f3f5;
+        --muted: #9aa1ac;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    .card {
+      background: var(--card);
+      max-width: 420px;
+      width: calc(100% - 32px);
+      padding: 40px 32px;
+      border-radius: 16px;
+      text-align: center;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+    }
+    .icon { font-size: 48px; margin-bottom: 12px; }
+    h1 { font-size: 22px; margin: 0 0 8px; }
+    p { color: var(--muted); margin: 6px 0; line-height: 1.5; }
+    .site { color: var(--accent); font-weight: 600; }
+    .window {
+      display: inline-block;
+      margin-top: 16px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: var(--bg);
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">🚫</div>
+    <h1>Este sitio está bloqueado ahora</h1>
+    <p><span class="site" id="site">Este sitio</span> no está disponible en este momento.</p>
+    <p id="schedule-text" hidden>Puedes usarlo en este horario:</p>
+    <div class="window" id="window" hidden></div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const site = params.get("site");
+    const from = params.get("from");
+    const to = params.get("to");
+
+    if (site) document.getElementById("site").textContent = site;
+
+    if (from && to) {
+      document.getElementById("window").textContent = from + " – " + to;
+      document.getElementById("window").hidden = false;
+      document.getElementById("schedule-text").hidden = false;
+    }
+  </script>
+</body>
+</html>
