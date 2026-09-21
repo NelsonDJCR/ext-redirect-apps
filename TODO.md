@@ -1,1 +1,1 @@
-- Before starting a new session, enforce a 5-minute waiting period. Add this as a configurable option in the settings section, enabled by default with a value of 5 minutes.
+- Fix timer in the locked page, show the reason
