@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>ext-redirect-apps</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --surface: #f3f4f6;
+      --border: #e2e5ea;
+      --text: #1c1f24;
+      --muted: #6b7280;
+      --accent: #3b6cf6;
+      --danger: #e5484d;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1a1d22;
+        --surface: #23272e;
+        --border: #333842;
+        --text: #f1f3f5;
+        --muted: #9aa1ac;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      width: 340px;
+      margin: 0;
+      padding: 16px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      font-size: 14px;
+    }
+    h1 { font-size: 16px; margin: 0 0 4px; }
+    .hint { color: var(--muted); font-size: 12px; margin: 0 0 14px; line-height: 1.4; }
+
+    input[type="text"], input[type="time"] {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+      font: inherit;
+    }
+    input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+    #add-form { display: grid; gap: 8px; margin-bottom: 16px; }
+    .times-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .field label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+
+    button {
+      font: inherit;
+      cursor: pointer;
+      border: none;
+      border-radius: 8px;
+    }
+    #add-btn {
+      padding: 9px;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+    }
+    #add-btn:hover { filter: brightness(1.08); }
+    #error { color: var(--danger); font-size: 12px; min-height: 16px; margin: 0; }
+
+    h2 { font-size: 13px; margin: 0 0 8px; color: var(--muted); font-weight: 600; }
+    #empty { color: var(--muted); text-align: center; padding: 16px 0; font-size: 13px; }
+    #list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-height: 260px; overflow-y: auto; }
+
+    .item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+    }
+    .item.disabled .item-name { text-decoration: line-through; opacity: 0.55; }
+    .item-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .item-name { font-weight: 600; word-break: break-all; }
+    .item-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .item-times { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+    .toggle { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
+    .delete-btn {
+      background: transparent;
+      color: var(--danger);
+      padding: 2px 6px;
+      font-size: 16px;
+      line-height: 1;
+    }
+    .delete-btn:hover { background: rgba(229, 72, 77, 0.12); }
+  </style>
+</head>
+<body>
+  <h1>ext-redirect-apps</h1>
+  <p class="hint">Agrega el nombre de un sitio (ej. facebook) y el horario en el que sí puedes usarlo. Fuera de ese horario se bloquea.</p>
+
+  <div id="add-form">
+    <input type="text" id="name" placeholder="facebook.com o solo facebook" autocomplete="off" />
+    <div class="times-row">
+      <div class="field">
+        <label for="from">Permitido desde</label>
+        <input type="time" id="from" value="10:00" />
+      </div>
+      <div class="field">
+        <label for="to">Permitido hasta</label>
+        <input type="time" id="to" value="17:00" />
+      </div>
+    </div>
+    <button type="button" id="add-btn">Agregar sitio</button>
+    <p id="error"></p>
+  </div>
+
+  <h2>Sitios en la lista</h2>
+  <p id="empty">Todavía no has agregado ningún sitio.</p>
+  <ul id="list"></ul>
+
+  <script src="popup.js"></script>
+</body>
+</html>
