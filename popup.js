@@ -623,5 +623,7 @@ render();
 
 if (refreshTimer) clearInterval(refreshTimer);
 refreshTimer = setInterval(() => {
-  if (!viewSites.hidden) render();
+  // Evita reconstruir el formulario mientras se edita una hora.
+  // Si se re-renderiza, el input de tipo time pierde foco y valor parcial.
+  if (!viewSites.hidden && editingId === null) render();
 }, 1000);
