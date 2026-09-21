@@ -5,6 +5,7 @@ const DEFAULT_SETTINGS = {
   cooldownEnabled: true,
   cooldownMinutes: 5
 };
+const DEFAULT_POMODORO_MINUTES = 20;
 const MIN_SECONDS = 5;
 const MAX_SECONDS = 300;
 const MIN_SESSION_MINUTES = 1;
@@ -25,6 +26,8 @@ const listEl = $("list");
 const emptyEl = $("empty");
 const settingsBtn = $("settings-btn");
 const backBtn = $("back-btn");
+const pomodoroBtn = $("pomodoro-btn");
+const pomodoroStatusEl = $("pomodoro-status");
 const lockEnabledInput = $("lock-enabled");
 const lockSecondsInput = $("lock-seconds");
 const lockSecondsRow = $("lock-seconds-row");
@@ -83,6 +86,42 @@ function formatMinutesFromMs(ms) {
   const m = total % 60;
   if (h > 0) return h + "h " + String(m).padStart(2, "0") + "m";
   return total + "m";
+}
+
+function formatClockFromMs(ms) {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return String(minutes).padStart(2, "0") + ":" + String(seconds).padStart(2, "0");
+}
+
+function getPomodoroState(rawPomodoro, nowMs = Date.now()) {
+  const until = Number(rawPomodoro?.until || 0);
+  if (!Number.isFinite(until) || until <= nowMs) {
+    return { active: false, remainingMs: 0 };
+  }
+  return {
+    active: true,
+    remainingMs: until - nowMs
+  };
+}
+
+function renderPomodoro(rawPomodoro, nowMs = Date.now()) {
+  const state = getPomodoroState(rawPomodoro, nowMs);
+  if (state.active) {
+    pomodoroBtn.textContent = "Detener Pomodoro";
+    pomodoroBtn.className = "btn-secondary";
+    pomodoroStatusEl.textContent =
+      "Pomodoro activo: todos los sitios bloqueados. Tiempo restante " +
+      formatClockFromMs(state.remainingMs) +
+      ".";
+    return;
+  }
+
+  pomodoroBtn.textContent = "Iniciar Pomodoro (" + DEFAULT_POMODORO_MINUTES + " min)";
+  pomodoroBtn.className = "btn-primary";
+  pomodoroStatusEl.textContent =
+    "Bloquea todos los sitios por " + DEFAULT_POMODORO_MINUTES + " minutos para enfocarte.";
 }
 
 function getSiteStatus(site, sessions, cooldowns, settings, nowMs) {
@@ -283,10 +322,12 @@ function makeIconButton(symbol, title, extraClass) {
 }
 
 async function render() {
-  const { sites = [], sessions = {}, cooldowns = {}, settings = {} } =
-    await chrome.storage.local.get(["sites", "sessions", "cooldowns", "settings"]);
+  const { sites = [], sessions = {}, cooldowns = {}, settings = {}, pomodoro = null } =
+    await chrome.storage.local.get(["sites", "sessions", "cooldowns", "settings", "pomodoro"]);
   const mergedSettings = effectiveSettings(settings);
   const nowMs = Date.now();
+
+  renderPomodoro(pomodoro, nowMs);
 
   listEl.textContent = "";
   emptyEl.hidden = sites.length > 0;
@@ -547,6 +588,28 @@ settingsBtn.addEventListener("click", () => {
 backBtn.addEventListener("click", () => {
   viewSettings.hidden = true;
   viewSites.hidden = false;
+});
+
+pomodoroBtn.addEventListener("click", async () => {
+  const { pomodoro = null } = await chrome.storage.local.get("pomodoro");
+  const state = getPomodoroState(pomodoro);
+
+  if (state.active) {
+    await chrome.storage.local.remove("pomodoro");
+    render();
+    return;
+  }
+
+  const now = Date.now();
+  const durationMs = DEFAULT_POMODORO_MINUTES * 60 * 1000;
+  await chrome.storage.local.set({
+    pomodoro: {
+      startedAt: now,
+      durationMinutes: DEFAULT_POMODORO_MINUTES,
+      until: now + durationMs
+    }
+  });
+  render();
 });
 
 /* ---------- Inicio ---------- */

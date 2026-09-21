@@ -128,7 +128,12 @@
       return String(minutesPart).padStart(2, "0") + ":" + String(secondsPart).padStart(2, "0");
     }
 
-    function showCooldownTimer() {
+    function showCountdownTimer(options = {}) {
+      const {
+        doneLabel = "Ya puedes volver a entrar",
+        showEnterButtonWhenDone = true
+      } = options;
+
       timerEl.hidden = false;
       timerLabelEl.hidden = false;
       enterBtnEl.hidden = true;
@@ -141,8 +146,8 @@
 
       if (!(endAt > Date.now())) {
         timerEl.textContent = "00:00";
-        timerLabelEl.textContent = "Ya puedes volver a entrar";
-        enterBtnEl.hidden = false;
+        timerLabelEl.textContent = doneLabel;
+        enterBtnEl.hidden = !showEnterButtonWhenDone;
         return;
       }
 
@@ -151,8 +156,8 @@
         const remaining = endAt - Date.now();
         if (remaining <= 0) {
           timerEl.textContent = "00:00";
-          timerLabelEl.textContent = "Ya puedes volver a entrar";
-          enterBtnEl.hidden = false;
+          timerLabelEl.textContent = doneLabel;
+          enterBtnEl.hidden = !showEnterButtonWhenDone;
           if (intervalId) clearInterval(intervalId);
           return;
         }
@@ -170,7 +175,14 @@
         "está en espera durante " + minutes + (minutes === "1" ? " minuto." : " minutos.");
       scheduleTextEl.textContent =
         "Después de la espera, podrás usarlo en este horario:";
-      showCooldownTimer();
+      showCountdownTimer();
+    } else if (reason === "pomodoro") {
+      document.getElementById("site").textContent = "Todos los sitios";
+      iconEl.textContent = "🍅";
+      titleEl.textContent = "Modo Pomodoro activo";
+      messageRestEl.textContent = "están bloqueados temporalmente para mantener el enfoque.";
+      timerLabelEl.textContent = "Fin del pomodoro";
+      showCountdownTimer({ doneLabel: "Pomodoro completado", showEnterButtonWhenDone: false });
     } else if (reason === "schedule") {
       iconEl.textContent = "🕒";
       titleEl.textContent = "Fuera de horario permitido";

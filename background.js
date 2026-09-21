@@ -6,6 +6,7 @@ const DEFAULT_SETTINGS = {
   cooldownEnabled: true,
   cooldownMinutes: 5
 };
+const DEFAULT_POMODORO_MINUTES = 20;
 
 // "facebook.com", "https://m.facebook.com/x" o "Facebook" -> "facebook"
 function toKeyword(input) {
@@ -239,8 +240,9 @@ async function doSync() {
     sites = [],
     sessions = {},
     cooldowns = {},
-    settings = {}
-  } = await chrome.storage.local.get(["sites", "sessions", "cooldowns", "settings"]);
+    settings = {},
+    pomodoro = null
+  } = await chrome.storage.local.get(["sites", "sessions", "cooldowns", "settings", "pomodoro"]);
 
   const now = Date.now();
   const merged = effectiveSettings(settings);
@@ -249,6 +251,40 @@ async function doSync() {
   const cleanCooldowns = { ...cooldowns };
   const overLimitSites = [];
   let storageChanged = false;
+
+  const pomodoroUntil = Number(pomodoro?.until || 0);
+  const pomodoroActive = Number.isFinite(pomodoroUntil) && pomodoroUntil > now;
+
+  if (pomodoro && !pomodoroActive) {
+    await chrome.storage.local.remove("pomodoro");
+  }
+
+  if (pomodoroActive) {
+    const remainingMinutes = Math.max(1, Math.ceil((pomodoroUntil - now) / 60000));
+    const params = new URLSearchParams({
+      reason: "pomodoro",
+      site: "todos",
+      minutes: String(remainingMinutes),
+      until: String(pomodoroUntil)
+    });
+
+    rules.push({
+      id: 1,
+      priority: 1,
+      action: {
+        type: "redirect",
+        redirect: { extensionPath: "/blocked.html?" + params.toString() }
+      },
+      condition: {
+        regexFilter: "^https?://",
+        resourceTypes: ["main_frame"]
+      }
+    });
+
+    chrome.alarms.create("pomodoro-end", { when: pomodoroUntil });
+  }
+
+  if (!pomodoroActive) {
 
   for (const site of sites) {
     if (site.enabled === false) continue;
@@ -314,6 +350,7 @@ async function doSync() {
         resourceTypes: ["main_frame"]
       }
     });
+  }
   }
 
   const existing = await chrome.declarativeNetRequest.getDynamicRules();
@@ -430,7 +467,8 @@ chrome.runtime.onStartup.addListener(() => {
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (
     alarm.name === "tick" ||
-    alarm.name.startsWith("cooldown-end:")
+    alarm.name.startsWith("cooldown-end:") ||
+    alarm.name === "pomodoro-end"
   ) {
     enqueue(async () => {
       await updateSessionsFromActivity();
@@ -442,7 +480,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 // Cuando cambias la lista o configuración desde el popup, se aplica al instante
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
-  if (changes.sites || changes.settings) {
+  if (changes.sites || changes.settings || changes.pomodoro) {
     enqueue(async () => {
       await updateSessionsFromActivity();
       await doSync();
