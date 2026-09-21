@@ -12,6 +12,7 @@
       --muted: #6b7280;
       --accent: #3b6cf6;
       --danger: #e5484d;
+      --ok: #2fa84f;
     }
     @media (prefers-color-scheme: dark) {
       :root {
@@ -22,9 +23,11 @@
         --muted: #9aa1ac;
       }
     }
+    [hidden] { display: none !important; }
     * { box-sizing: border-box; }
     body {
       width: 340px;
+      min-height: 400px;
       margin: 0;
       padding: 16px;
       background: var(--bg);
@@ -32,10 +35,51 @@
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       font-size: 14px;
     }
-    h1 { font-size: 16px; margin: 0 0 4px; }
-    .hint { color: var(--muted); font-size: 12px; margin: 0 0 14px; line-height: 1.4; }
+    h1 { font-size: 16px; margin: 0; }
+    h2 { font-size: 13px; margin: 0 0 8px; color: var(--muted); font-weight: 600; }
+    .hint { color: var(--muted); font-size: 12px; margin: 4px 0 14px; line-height: 1.4; }
 
-    input[type="text"], input[type="time"] {
+    /* Cabecera */
+    .top { display: flex; align-items: center; justify-content: space-between; }
+
+    /* Botones */
+    button { font: inherit; cursor: pointer; border: none; border-radius: 8px; }
+    .btn-primary {
+      padding: 9px 14px;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+    }
+    .btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
+    .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
+    .btn-secondary {
+      padding: 9px 14px;
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { background: var(--border); }
+    .icon-btn {
+      background: transparent;
+      color: var(--muted);
+      padding: 4px 7px;
+      font-size: 15px;
+      line-height: 1;
+    }
+    .icon-btn:hover { background: var(--surface); color: var(--text); }
+    .icon-btn.danger { color: var(--danger); }
+    .icon-btn.danger:hover { background: rgba(229, 72, 77, 0.12); }
+    .back-btn {
+      background: transparent;
+      color: var(--muted);
+      padding: 4px 0;
+      margin: 0 0 10px;
+      font-size: 13px;
+    }
+    .back-btn:hover { color: var(--text); }
+
+    /* Campos */
+    input[type="text"], input[type="time"], input[type="number"] {
       width: 100%;
       padding: 8px 10px;
       border: 1px solid var(--border);
@@ -45,30 +89,25 @@
       font: inherit;
     }
     input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-
-    #add-form { display: grid; gap: 8px; margin-bottom: 16px; }
-    .times-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .field label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 3px; }
 
-    button {
-      font: inherit;
-      cursor: pointer;
-      border: none;
-      border-radius: 8px;
-    }
-    #add-btn {
-      padding: 9px;
-      background: var(--accent);
-      color: #fff;
-      font-weight: 600;
-    }
-    #add-btn:hover { filter: brightness(1.08); }
-    #error { color: var(--danger); font-size: 12px; min-height: 16px; margin: 0; }
+    /* Formulario de agregar */
+    #add-form { display: grid; gap: 8px; margin-bottom: 16px; }
+    .times-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    #add-btn { width: 100%; }
+    .error { color: var(--danger); font-size: 12px; min-height: 16px; margin: 0; }
 
-    h2 { font-size: 13px; margin: 0 0 8px; color: var(--muted); font-weight: 600; }
+    /* Lista */
     #empty { color: var(--muted); text-align: center; padding: 16px 0; font-size: 13px; }
-    #list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-height: 260px; overflow-y: auto; }
-
+    #list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 8px;
+      max-height: 260px;
+      overflow-y: auto;
+    }
     .item {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -77,46 +116,209 @@
       display: grid;
       gap: 8px;
     }
-    .item.disabled .item-name { text-decoration: line-through; opacity: 0.55; }
+    .item.disabled .item-name,
+    .item.disabled .item-schedule { text-decoration: line-through; opacity: 0.55; }
     .item-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .item-name { font-weight: 600; word-break: break-all; }
-    .item-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .item-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+    .item-schedule { color: var(--muted); font-size: 12px; }
     .item-times { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .edit-actions { display: flex; gap: 8px; justify-content: flex-end; }
+    .edit-actions button { padding: 6px 12px; font-size: 13px; }
+    .toggle { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; margin-right: 6px; }
 
-    .toggle { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
-    .delete-btn {
-      background: transparent;
-      color: var(--danger);
-      padding: 2px 6px;
-      font-size: 16px;
-      line-height: 1;
+    /* Configuración */
+    .setting {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 8px;
     }
-    .delete-btn:hover { background: rgba(229, 72, 77, 0.12); }
+    .setting-text { display: grid; gap: 3px; }
+    .setting-title { font-weight: 600; }
+    .setting-desc { color: var(--muted); font-size: 12px; line-height: 1.4; }
+    .setting input[type="number"] { width: 74px; text-align: center; }
+
+    .switch { position: relative; width: 38px; height: 22px; flex-shrink: 0; }
+    .switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .slider {
+      position: absolute;
+      inset: 0;
+      background: var(--border);
+      border-radius: 999px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .slider::before {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 16px;
+      height: 16px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+    .switch input:checked + .slider { background: var(--accent); }
+    .switch input:checked + .slider::before { transform: translateX(16px); }
+    .switch input:focus-visible + .slider { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    /* Pantalla de espera */
+    #overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: color-mix(in srgb, var(--bg) 82%, transparent);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      animation: fade-in 0.35s ease both;
+    }
+    .overlay-card {
+      width: 100%;
+      padding: 24px 20px;
+      text-align: center;
+      display: grid;
+      gap: 14px;
+      justify-items: center;
+      animation: rise 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+    #overlay-title { margin: 0; font-weight: 600; font-size: 15px; word-break: break-all; }
+    #overlay-msg { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; max-width: 240px; }
+    .overlay-actions { display: flex; gap: 8px; margin-top: 4px; }
+
+    .ring {
+      position: relative;
+      width: 132px;
+      height: 132px;
+      animation: breathe 4s ease-in-out infinite;
+    }
+    .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .ring-track { fill: none; stroke: var(--border); stroke-width: 3; }
+    .ring-progress {
+      fill: none;
+      stroke: var(--accent);
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-dasharray: 276.46;
+      stroke-dashoffset: 276.46;
+      transition: stroke 0.4s ease;
+    }
+    #overlay.running .ring-progress { animation: fill var(--duration) linear forwards; }
+    #overlay.done .ring-progress { stroke: var(--ok); stroke-dashoffset: 0; animation: none; }
+    #overlay.done .ring { animation: none; }
+    .ring-center {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #count {
+      font-size: 38px;
+      font-weight: 300;
+      font-variant-numeric: tabular-nums;
+    }
+    #overlay.done #count { color: var(--ok); animation: pop 0.4s ease both; }
+
+    @keyframes fill { to { stroke-dashoffset: 0; } }
+    @keyframes breathe {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+    @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    @keyframes pop { 0% { transform: scale(0.6); opacity: 0; } 70% { transform: scale(1.15); } 100% { transform: scale(1); opacity: 1; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      .ring, #overlay, .overlay-card { animation: none; }
+    }
   </style>
 </head>
 <body>
-  <h1>ext-redirect-apps</h1>
-  <p class="hint">Agrega el nombre de un sitio (ej. facebook) y el horario en el que sí puedes usarlo. Fuera de ese horario se bloquea.</p>
+  <!-- Vista principal: lista de sitios -->
+  <section id="view-sites">
+    <div class="top">
+      <h1>ext-redirect-apps</h1>
+      <button type="button" id="settings-btn" class="icon-btn" title="Configuración">⚙</button>
+    </div>
+    <p class="hint">Agrega el nombre de un sitio (ej. facebook) y el horario en el que sí puedes usarlo. Fuera de ese horario se bloquea.</p>
 
-  <div id="add-form">
-    <input type="text" id="name" placeholder="facebook.com o solo facebook" autocomplete="off" />
-    <div class="times-row">
-      <div class="field">
-        <label for="from">Permitido desde</label>
-        <input type="time" id="from" value="10:00" />
+    <div id="add-form">
+      <input type="text" id="name" placeholder="facebook.com o solo facebook" autocomplete="off" />
+      <div class="times-row">
+        <div class="field">
+          <label for="from">Permitido desde</label>
+          <input type="time" id="from" value="10:00" />
+        </div>
+        <div class="field">
+          <label for="to">Permitido hasta</label>
+          <input type="time" id="to" value="17:00" />
+        </div>
       </div>
-      <div class="field">
-        <label for="to">Permitido hasta</label>
-        <input type="time" id="to" value="17:00" />
+      <button type="button" id="add-btn" class="btn-primary">Agregar sitio</button>
+      <p id="error" class="error"></p>
+    </div>
+
+    <h2>Sitios en la lista</h2>
+    <p id="empty">Todavía no has agregado ningún sitio.</p>
+    <ul id="list"></ul>
+  </section>
+
+  <!-- Vista de configuración -->
+  <section id="view-settings" hidden>
+    <button type="button" id="back-btn" class="back-btn">← Volver</button>
+    <h1>Configuración</h1>
+    <p class="hint">Ajustes de la extensión.</p>
+
+    <div class="setting">
+      <div class="setting-text">
+        <span class="setting-title">Bloquear configuraciones por tiempo</span>
+        <span class="setting-desc">Para editar o eliminar un sitio tendrás que esperar antes de poder hacerlo.</span>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="lock-enabled" />
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="setting" id="lock-seconds-row">
+      <div class="setting-text">
+        <span class="setting-title">Tiempo de espera</span>
+        <span class="setting-desc">En segundos (entre 5 y 300).</span>
+      </div>
+      <input type="number" id="lock-seconds" min="5" max="300" step="1" value="15" />
+    </div>
+
+    <p id="settings-error" class="error"></p>
+  </section>
+
+  <!-- Pantalla de espera -->
+  <div id="overlay" hidden>
+    <div class="overlay-card">
+      <p id="overlay-title">Cambio de configuración</p>
+      <div class="ring">
+        <svg viewBox="0 0 100 100" aria-hidden="true">
+          <circle class="ring-track" cx="50" cy="50" r="44"></circle>
+          <circle class="ring-progress" cx="50" cy="50" r="44"></circle>
+        </svg>
+        <div class="ring-center"><span id="count">15</span></div>
+      </div>
+      <p id="overlay-msg">Respira. ¿De verdad necesitas hacer este cambio?</p>
+      <div class="overlay-actions">
+        <button type="button" id="overlay-cancel" class="btn-secondary">Cancelar</button>
+        <button type="button" id="overlay-confirm" class="btn-primary" disabled>Continuar</button>
       </div>
     </div>
-    <button type="button" id="add-btn">Agregar sitio</button>
-    <p id="error"></p>
   </div>
-
-  <h2>Sitios en la lista</h2>
-  <p id="empty">Todavía no has agregado ningún sitio.</p>
-  <ul id="list"></ul>
 
   <script src="popup.js"></script>
 </body>
